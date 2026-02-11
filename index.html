@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hologram Heart (Ultra)</title>
+  <style>
+    :root{
+      --bg:#05060a;
+      --neon:#63b3ff;
+      --neon2:#2c7dff;
+      --glow: 0 0 10px rgba(99,179,255,.7), 0 0 26px rgba(44,125,255,.55), 0 0 60px rgba(44,125,255,.30);
+    }
+
+    html,body{
+      margin:0;
+      height:100%;
+      background:
+        radial-gradient(1200px 600px at 50% 35%, rgba(36,86,255,.10), transparent 55%),
+        radial-gradient(900px 500px at 50% 60%, rgba(36,255,255,.07), transparent 60%),
+        var(--bg);
+      overflow:hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:#cfe6ff;
+    }
+
+    .wrap{
+      position:relative;
+      height:100%;
+      width:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    canvas{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+    }
+
+    .title{
+      position:absolute;
+      top:9%;
+      left:50%;
+      transform:translateX(-50%);
+      font-size: clamp(22px, 4vw, 44px);
+      letter-spacing: .5px;
+      color: #bfe2ff;
+      text-shadow: var(--glow);
+      user-select:none;
+      font-weight: 700;
+      opacity:.96;
+      filter: drop-shadow(0 0 16px rgba(90,167,255,.25));
+      animation: flicker 3.8s infinite ease-in-out;
+      white-space: nowrap;
+    }
+
+    @keyframes flicker{
+      0%,100% { opacity: .95; filter: drop-shadow(0 0 18px rgba(90,167,255,.25)); }
+      45% { opacity: .88; filter: drop-shadow(0 0 10px rgba(90,167,255,.18)); }
+      55% { opacity: .98; filter: drop-shadow(0 0 24px rgba(90,167,255,.30)); }
+    }
+
+    .baseGlow{
+      position:absolute;
+      bottom:16%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(360px, 76vw);
+      height:110px;
+      pointer-events:none;
+    }
+
+    .baseGlow::before{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:52%;
+      transform:translate(-50%,-50%);
+      width:100%;
+      height:40px;
+      border-radius: 50%;
+      background:
+        radial-gradient(closest-side, rgba(99,179,255,.75), rgba(44,125,255,.30) 45%, transparent 75%);
+      box-shadow: 0 0 36px rgba(99,179,255,.38), 0 0 110px rgba(44,125,255,.22);
+      opacity:.95;
+      animation: basePulse 2.4s infinite ease-in-out;
+    }
+
+    .baseGlow::after{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:52%;
+      transform:translate(-50%,-50%);
+      width:92%;
+      height:26px;
+      border-radius: 50%;
+      border: 2px solid rgba(160,220,255,.55);
+      box-shadow: 0 0 16px rgba(99,179,255,.55), 0 0 44px rgba(44,125,255,.28);
+      opacity:.9;
+    }
+
+    @keyframes basePulse{
+      0%,100% { transform:translate(-50%,-50%) scale(1); opacity:.92; }
+      50%     { transform:translate(-50%,-50%) scale(1.07); opacity:1; }
+    }
+
+    .scanlines{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(120,190,255,.06),
+        rgba(120,190,255,.06) 1px,
+        transparent 1px,
+        transparent 6px
+      );
+      opacity:.18;
+      mix-blend-mode: screen;
+    }
+
+    .vignette{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background: radial-gradient(circle at 50% 40%, transparent 35%, rgba(0,0,0,.55) 78%);
+      opacity:.55;
+    }
+
+    .hint{
+      position:absolute;
+      bottom:3%;
+      left:50%;
+      transform:translateX(-50%);
+      font-size: 12px;
+      opacity:.55;
+      user-select:none;
+      text-align:center;
+      padding: 0 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">I Love You</div>
+    <canvas id="c"></canvas>
+    <div class="baseGlow"></div>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="hint">Move mouse / touch. Tap & hold for stronger burst ✨</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    const DPR = Math.min(2, window.devicePixelRatio || 1);
+
+    function resize(){
+      canvas.width  = Math.floor(innerWidth * DPR);
+      canvas.height = Math.floor(innerHeight * DPR);
+      canvas.style.width  = innerWidth + "px";
+      canvas.style.height = innerHeight + "px";
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    // Heart parametric function
+    function heart(t){
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+      return { x: x/18, y: -y/18 };
+    }
+
+    const center = () => ({ x: innerWidth * 0.5, y: innerHeight * 0.42 });
+
+    // More particles + more motion
+    const settings = {
+      count: 3200,              // 🔥 increased quantity
+      heartScale: () => Math.min(innerWidth, innerHeight) * 0.19,
+      depth: 0.75,
+      pullToShape: 0.045,
+      damping: 0.90,
+      twinkle: 0.95,
+      glow: true,
+
+      // extra animation
+      swirl: 1.15,              // orbit-like force around center
+      drift: 0.35,
+      breatheAmp: 0.055,        // heart pulse amplitude
+      breatheSpeed: 0.9,        // heart pulse speed
+      trailAlpha: 0.18          // lower = longer trails
+    };
+
+    // Pointer interaction
+    const pointer = { x: innerWidth/2, y: innerHeight/2, down:false, power:1 };
+
+    addEventListener("mousemove", e => { pointer.x = e.clientX; pointer.y = e.clientY; });
+    addEventListener("mousedown", () => { pointer.down = true; pointer.power = 1.35; burst(pointer.x, pointer.y, 80); });
+    addEventListener("mouseup",   () => { pointer.down = false; pointer.power = 1; });
+    addEventListener("touchstart", e => {
+      pointer.down = true;
+      pointer.power = 1.5;
+      const t = e.touches[0];
+      pointer.x = t.clientX; pointer.y = t.clientY;
+      burst(pointer.x, pointer.y, 110);
+    }, {passive:true});
+    addEventListener("touchmove", e => {
+      const t = e.touches[0];
+      pointer.x = t.clientX; pointer.y = t.clientY;
+    }, {passive:true});
+    addEventListener("touchend", () => { pointer.down=false; pointer.power = 1; });
+
+    // Simple sparks for burst effect
+    const sparks = [];
+    function burst(x, y, n){
+      for(let i=0;i<n;i++){
+        const a = Math.random()*Math.PI*2;
+        const sp = 2 + Math.random()*6;
+        sparks.push({
+          x, y,
+          vx: Math.cos(a)*sp,
+          vy: Math.sin(a)*sp,
+          life: 0.8 + Math.random()*0.6
+        });
+      }
+    }
+
+    class Particle{
+      constructor(first=true){
+        this.reset(first);
+      }
+      reset(first=false){
+        this.t = Math.random() * Math.PI * 2;
+        this.p = heart(this.t);
+
+        this.z = (Math.random()*2 - 1) * settings.depth;
+
+        const c = center();
+        const s = settings.heartScale();
+
+        this.tx = c.x + this.p.x * s;
+        this.ty = c.y + this.p.y * s;
+
+        const spread = first ? 0.22 : 0.95;
+        this.x = this.tx + (Math.random()*2 - 1) * s * spread;
+        this.y = this.ty + (Math.random()*2 - 1) * s * spread;
+
+        this.vx = (Math.random()*2 - 1) * 1.0;
+        this.vy = (Math.random()*2 - 1) * 1.0;
+
+        this.size = 0.6 + Math.random()*1.5;
+        this.baseAlpha = 0.28 + Math.random()*0.65;
+        this.phase = Math.random() * Math.PI * 2;
+
+        // slight per-particle "spin"
+        this.spin = (Math.random()*2 - 1) * 0.9;
+      }
+
+      step(dt, time){
+        const c = center();
+        const s = settings.heartScale();
+
+        // "breathing" heart: target points pulse in/out
+        const breathe = 1 + Math.sin(time * settings.breatheSpeed) * settings.breatheAmp;
+
+        // slowly rotate the heart shape for animation (very subtle)
+        const rot = Math.sin(time*0.25) * 0.08;
+        const cos = Math.cos(rot), sin = Math.sin(rot);
+
+        const hx = this.p.x * s * breathe;
+        const hy = this.p.y * s * breathe;
+
+        const rx = hx * cos - hy * sin;
+        const ry = hx * sin + hy * cos;
+
+        this.tx = c.x + rx;
+        this.ty = c.y + ry;
+
+        // parallax
+        const par = 1 + this.z * 0.35;
+
+        // gentle drift
+        this.phase += dt * (1.6 + Math.random()*0.6);
+        const driftX = Math.sin(this.phase) * settings.drift;
+        const driftY = Math.cos(this.phase*0.9) * settings.drift;
+
+        // pull back to heart
+        const ax = (this.tx - this.x) * settings.pullToShape;
+        const ay = (this.ty - this.y) * settings.pullToShape;
+
+        // swirl force around center (adds life)
+        const dxC = this.x - c.x;
+        const dyC = this.y - c.y;
+        const distC = Math.max(30, Math.hypot(dxC, dyC));
+        const swirl = settings.swirl / distC;
+        const sx = -dyC * swirl * this.spin;
+        const sy =  dxC * swirl * this.spin;
+
+        // pointer repulsion
+        const dx = (this.x - pointer.x);
+        const dy = (this.y - pointer.y);
+        const dist2 = dx*dx + dy*dy;
+        const radius = pointer.down ? 260 : 160;
+        const r2 = radius*radius;
+
+        let rxp=0, ryp=0;
+        if(dist2 < r2){
+          const d = Math.max(12, Math.sqrt(dist2));
+          const force = (1 - d/radius) * (pointer.down ? 18 : 10) * pointer.power;
+          rxp = (dx / d) * force;
+          ryp = (dy / d) * force;
+        }
+
+        this.vx += ax + driftX + sx + rxp;
+        this.vy += ay + driftY + sy + ryp;
+
+        this.vx *= settings.damping;
+        this.vy *= settings.damping;
+
+        this.x += this.vx * par;
+        this.y += this.vy * par;
+
+        // reset if far away
+        const lim = s * 2.6;
+        if(Math.abs(this.x - c.x) > lim || Math.abs(this.y - c.y) > lim){
+          this.reset(false);
+        }
+      }
+
+      draw(time){
+        const tw = (Math.sin(this.phase * 2.4 + time*1.2) * 0.5 + 0.5) * settings.twinkle;
+        const a = Math.min(1, this.baseAlpha * (0.55 + tw));
+
+        const zt = (this.z + settings.depth) / (2*settings.depth);
+        const r = Math.floor(24 + 46*zt);
+        const g = Math.floor(120 + 95*zt);
+        const b = 255;
+
+        ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+
+        if(settings.glow){
+          ctx.shadowColor = `rgba(90,170,255,${0.55*a})`;
+          ctx.shadowBlur = 18 + 22*(1-zt);
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // particles array
+    let particles = Array.from({length: settings.count}, () => new Particle(true));
+
+    // draw base shimmer
+    function drawBaseShimmer(timeMs){
+      const time = timeMs * 0.001;
+      const w = Math.min(360, innerWidth*0.76);
+      const h = 28;
+      const x = innerWidth*0.5, y = innerHeight*0.84;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.translate(x, y);
+
+      const grd = ctx.createRadialGradient(0,0, 2, 0,0, w*0.6);
+      grd.addColorStop(0, "rgba(99,179,255,0.38)");
+      grd.addColorStop(0.5, "rgba(44,125,255,0.20)");
+      grd.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, w*0.58, h*1.9, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(160,220,255,0.34)";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "rgba(99,179,255,0.7)";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, w*0.48, h, 0, 0, Math.PI*2);
+      ctx.stroke();
+
+      // moving highlight arc
+      const t = time * 1.35;
+      ctx.strokeStyle = "rgba(210,245,255,0.55)";
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, w*0.48, h, 0, t, t + Math.PI*0.6);
+      ctx.stroke();
+
+      ctx.restore();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    function drawBeam(){
+      const c = center();
+      const s = settings.heartScale();
+
+      const topY = c.y - s*0.55;
+      const bottomY = innerHeight*0.84;
+
+      const topW = s * 0.45;
+      const bottomW = s * 1.05;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      const grad = ctx.createLinearGradient(0, topY, 0, bottomY);
+      grad.addColorStop(0, "rgba(80,170,255,0.00)");
+      grad.addColorStop(0.35, "rgba(80,170,255,0.06)");
+      grad.addColorStop(1, "rgba(80,170,255,0.00)");
+      ctx.fillStyle = grad;
+
+      ctx.beginPath();
+      ctx.moveTo(c.x - topW, topY);
+      ctx.lineTo(c.x + topW, topY);
+      ctx.lineTo(c.x + bottomW, bottomY);
+      ctx.lineTo(c.x - bottomW, bottomY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    function drawSparks(dt){
+      for(let i=sparks.length-1;i>=0;i--){
+        const s = sparks[i];
+        s.life -= dt;
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vx *= 0.94;
+        s.vy *= 0.94;
+
+        const a = Math.max(0, s.life);
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = `rgba(170,240,255,${0.35*a})`;
+        ctx.shadowColor = `rgba(99,179,255,${0.65*a})`;
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 1.6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+
+        if(s.life <= 0) sparks.splice(i,1);
+      }
+    }
+
+    let last = performance.now();
+    function tick(now){
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+
+      // trailing background
+      ctx.fillStyle = `rgba(5,6,10,${settings.trailAlpha})`;
+      ctx.fillRect(0,0,innerWidth,innerHeight);
+
+      drawBeam();
+
+      const time = now * 0.001;
+
+      // update + draw particles
+      for(const p of particles){
+        p.step(dt, time);
+        p.draw(time);
+      }
+
+      drawSparks(dt);
+      drawBaseShimmer(now);
+
+      requestAnimationFrame(tick);
+    }
+
+    // start
+    ctx.fillStyle = "rgba(5,6,10,1)";
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+    requestAnimationFrame(tick);
+
+    // If device is slow, you can reduce count easily:
+    // settings.count = 2200; particles = Array.from({length: settings.count}, () => new Particle(true));
+  </script>
+</body>
+</html>
